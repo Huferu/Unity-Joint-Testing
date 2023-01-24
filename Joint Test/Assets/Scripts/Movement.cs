@@ -1,23 +1,93 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class Movement : MonoBehaviour
-{
-    private Rigidbody2D rb;
-    public float speed;
-    // Start is called before the first frame update
-    void Start()
-    {
-        rb = GetComponent<Rigidbody2D>();
+public class Movement : MonoBehaviour {
+    private Rigidbody2D _rb;
+    private BoxCollider2D _bc;
+    
+    //Horizontal movement
+    private float _moveX;
+    
+    public LayerMask groundLayer;
+    
+    [Header("Gravity Values")]
+    public float fallGravity;
+    public float defaultGravity;
+    
+    [Header("Speeds")]
+    public float walkSpeed;
+    public float runSpeed;
+    public float jumpForce;
+    
+    [Header("Coyote")]
+    public float coyoteTime;
+    private float _currentCoyoteTime;
+
+    [Header("Air Jumps")]
+    public int airJumpAmount;
+    private int _currentAirJumps;
+    private float _fallTimer;
+
+    private void Start() {
+        _rb = GetComponent<Rigidbody2D>();
+        _bc = GetComponent<BoxCollider2D>();
+        
+        _currentAirJumps = airJumpAmount;
+        _currentCoyoteTime = coyoteTime;
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        if (Input.GetKey(KeyCode.A))
-            rb.velocity = Vector2.left * speed * Time.deltaTime;
-        if (Input.GetKey(KeyCode.D))
-            rb.velocity = Vector2.right * speed * Time.deltaTime;
+    private void Update() {
+        var velocity = _rb.velocity;
+        
+        //Jump
+        if (Input.GetKeyDown(KeyCode.Space)) Jump();
+        
+        //Cancel jump
+        if (Input.GetKeyUp(KeyCode.Space) && _rb.velocity.y > 0)
+            _rb.velocity = new Vector2(_rb.velocity.x, velocity.y / 2);
+
+        if (IsGrounded()) {
+            _currentAirJumps = airJumpAmount;
+            _currentCoyoteTime = coyoteTime;
+            _rb.gravityScale = defaultGravity;
+        } else if (_currentCoyoteTime > 0) {
+            _currentCoyoteTime -= Time.deltaTime;
+        }
+
+        if (_rb.velocity.y < -0.1 && !IsGrounded()) {
+            _rb.gravityScale = fallGravity;
+        }
+    }
+
+    private void FixedUpdate() {
+        var velocity = _rb.velocity;
+        
+        _moveX = Input.GetAxis("Horizontal");
+        //Movement
+        if (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.RightControl)) {
+            _rb.velocity = new Vector2(_moveX * runSpeed, velocity.y);
+        } else {
+            _rb.velocity = new Vector2(_moveX * walkSpeed, velocity.y);
+        }
+    }
+
+    private void Jump() {
+        var velocity = _rb.velocity;
+        
+        if (_currentAirJumps <= 0 && _currentCoyoteTime <= 0) return;
+            
+        if (IsGrounded() || _currentCoyoteTime > 0) _rb.velocity = new Vector2(velocity.x, jumpForce);
+        else {
+            if (_currentAirJumps > 0) {
+                _currentAirJumps--;
+                _rb.velocity = new Vector2(velocity.x, jumpForce);
+            }
+        }
+
+        _currentCoyoteTime = 0;
+    }
+
+    private bool IsGrounded() {
+        var bounds = _bc.bounds;
+        return Physics2D.BoxCast(bounds.center, bounds.size, 0f, Vector2.down, 0.1f, groundLayer);
     }
 }
